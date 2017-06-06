@@ -33,10 +33,6 @@ class ConfluenceApi(object):
     def _request(self, method, sub_uri, params=None, **kwargs):
         url = "{}/{}".format(self.base_uri, sub_uri)
         headers = {"Content-Type": "application/json"}
-        initian_response = self.session.request(
-            method, url, headers=headers, verify=False)
-        if not initian_response.ok:
-            return initian_response
         if params:
             kwargs.update(params=params)
         # Ensure we are authenticated (set cookie, session, etc.)
