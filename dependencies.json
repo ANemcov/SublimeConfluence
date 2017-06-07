@@ -2,7 +2,10 @@
     "*": {
         "*": [
             "lxml",
-            "requests"
+            "requests",
+            "markdown2",
+            "codecs",
+            "pillow"
         ]
     }
 }

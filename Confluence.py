@@ -2,8 +2,12 @@ import json
 import os
 import re
 import sys
+import mimetypes
 
 import requests
+from PIL import Image
+import codecs
+
 import sublime
 import sublime_plugin
 
@@ -89,6 +93,9 @@ class ConfluenceApi(object):
     def delete_content(self, content_id):
         return self._delete("content/{}".format(content_id))
 
+    def create_or_update_attachments(self, content_id, content_data):
+        pass
+        
 
 class Markup(object):
     def __init__(self):
