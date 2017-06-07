@@ -5,7 +5,7 @@ import sys
 import mimetypes
 
 import requests
-from PIL import Image
+# from PIL import Image
 import codecs
 
 import sublime
@@ -93,7 +93,8 @@ class ConfluenceApi(object):
                 link.tag = "ri:attachment"
                 img.insert(1, link)
 
-                w, h = Image.open(file_dir + _src).size
+                # w, h = Image.open(file_dir + _src).size
+                w = 500
                 img.attrib["ac:width"] = "{}".format(min(w, 500))
 
                 img.attrib["ac:align"] = "center"

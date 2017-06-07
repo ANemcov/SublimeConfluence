@@ -2,8 +2,7 @@
     "*": {
         "*": [
             "lxml",
-            "requests",
-            "Pillow"
+            "requests"
         ]
     }
 }
