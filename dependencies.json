@@ -3,9 +3,7 @@
         "*": [
             "lxml",
             "requests",
-            "markdown2",
-            "codecs",
-            "pillow"
+            "Pillow"
         ]
     }
 }
