@@ -3,7 +3,7 @@
         "*": [
             "lxml",
             "requests",
-            "pillow"
+            "Pillow"
         ]
     }
 }
