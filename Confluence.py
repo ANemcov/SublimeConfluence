@@ -168,7 +168,7 @@ class ConfluenceApi(object):
             return update_content_resp
 
         upload_resp = self.create_or_update_attachments(content_id, images)
-        return upload_resp
+        return upload_resp, new_content_data
 
     def delete_content(self, content_id):
         return self._delete("content/{}".format(content_id))
@@ -508,7 +508,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                     space=space, version=version, body=body)
         try:
             self.confluence_api = ConfluenceApi(self.username, self.password, self.base_uri)
-            response = self.confluence_api.update_content(content_id, data, self.view.file_name())
+            response, mod_content = self.confluence_api.update_content(content_id, data, self.view.file_name())
             if response.ok:
                 content_uri = self.confluence_api.get_content_uri(self.content)
                 sublime.set_clipboard(content_uri)
@@ -516,6 +516,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                 self.view.settings().set("confluence_content", response.json())
             else:
                 print(response.text)
+                print(mod_content)
                 sublime.error_message("Can't update content, reason: {}".format(response.reason))
         except Exception:
             print(response.text)
@@ -550,7 +551,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                 data = dict(id=content_id, type="page", title=meta["title"],
                             space=space, version=version, body=body)
 
-                update_content_resp = self.confluence_api.update_content(content_id, data, self.view.file_name())
+                update_content_resp, mod_content = self.confluence_api.update_content(content_id, data, self.view.file_name())
                 if update_content_resp.ok:
                     self.view.settings().set("confluence_content", update_content_resp.json())
                     content_uri = self.confluence_api.get_content_uri(update_content_resp.json())
@@ -558,6 +559,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                     sublime.status_message(self.MSG_SUCCESS)
                 else:
                     print(update_content_resp.text)
+                    print(mod_content)
                     sublime.error_message("Can not update content, reason: {}".format(
                         update_content_resp.reason))
             else:
