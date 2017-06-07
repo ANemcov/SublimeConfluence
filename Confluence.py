@@ -122,9 +122,9 @@ class ConfluenceApi(object):
 
         return upload_resp
 
-    def create_content(self, content_data):
+    def create_content(self, content_data, filename=None):
 
-        new_content_data, images = self.extract_images(content_data)
+        new_content_data, images = self.extract_images(content_data, source_filename=filename)
 
         update_content_resp = self._post("content/", data=new_content_data)
         if not update_content_resp.ok:
@@ -159,8 +159,8 @@ class ConfluenceApi(object):
         webui = content["_links"]["webui"]
         return "{}{}".format(base, webui)
 
-    def update_content(self, content_id, content_data):
-        new_content_data, images = self.extract_images(content_data)
+    def update_content(self, content_id, content_data, filename=None):
+        new_content_data, images = self.extract_images(content_data, source_filename=filename)
 
         update_content_resp = self._put("content/{}".format(content_id),
                                         data=new_content_data)
@@ -168,7 +168,7 @@ class ConfluenceApi(object):
             return update_content_resp
 
         upload_resp = self.create_or_update_attachments(content_id, images)
-        return upload_resp
+        return upload_resp, new_content_data
 
     def delete_content(self, content_id):
         return self._delete("content/{}".format(content_id))
@@ -349,7 +349,7 @@ class PostConfluencePageCommand(BaseConfluencePageCommand):
             body = dict(storage=dict(value=new_content, representation="storage"))
             data = dict(type="page", title=meta["title"], ancestors=[dict(id=ancestor_id)],
                         space=space, body=body)
-            result = self.confluence_api.create_content(data)
+            result = self.confluence_api.create_content(data, self.view.file_name())
             if result.ok:
                 self.view.settings().set("confluence_content", result.json())
                 # copy content url
@@ -508,7 +508,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                     space=space, version=version, body=body)
         try:
             self.confluence_api = ConfluenceApi(self.username, self.password, self.base_uri)
-            response = self.confluence_api.update_content(content_id, data)
+            response, mod_content = self.confluence_api.update_content(content_id, data, self.view.file_name())
             if response.ok:
                 content_uri = self.confluence_api.get_content_uri(self.content)
                 sublime.set_clipboard(content_uri)
@@ -516,6 +516,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                 self.view.settings().set("confluence_content", response.json())
             else:
                 print(response.text)
+                print(mod_content)
                 sublime.error_message("Can't update content, reason: {}".format(response.reason))
         except Exception:
             print(response.text)
@@ -550,7 +551,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                 data = dict(id=content_id, type="page", title=meta["title"],
                             space=space, version=version, body=body)
 
-                update_content_resp = self.confluence_api.update_content(content_id, data)
+                update_content_resp, mod_content = self.confluence_api.update_content(content_id, data, self.view.file_name())
                 if update_content_resp.ok:
                     self.view.settings().set("confluence_content", update_content_resp.json())
                     content_uri = self.confluence_api.get_content_uri(update_content_resp.json())
@@ -558,6 +559,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                     sublime.status_message(self.MSG_SUCCESS)
                 else:
                     print(update_content_resp.text)
+                    print(mod_content)
                     sublime.error_message("Can not update content, reason: {}".format(
                         update_content_resp.reason))
             else:
