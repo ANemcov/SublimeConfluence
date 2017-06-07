@@ -502,7 +502,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
             markup = Markup()
             meta, content = markup.get_meta_and_content(contents)
             new_content = markup.to_html("\n".join(content), syntax)
-
+        print(new_content)
         space = dict(key=space_key)
         version = dict(number=version_number, minorEdit=False)
         body = dict(storage=dict(value=new_content, representation="storage"))
@@ -532,6 +532,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
         meta, content = markup.get_meta_and_content(contents)
         syntax = self.view.settings().get("syntax")
         new_content = markup.to_html("\n".join(content), syntax)
+        print(new_content)
         if not new_content:
             sublime.error_message(
                 "Can't update: this doesn't appear to be a valid Confluence page.")
@@ -572,6 +573,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                     get_content_by_id_resp.reason))
         else:
             print(get_content_by_title_resp.text)
+            print(new_content)
             sublime.error_message("Can not get content by title, reason: {}".format(
                 get_content_by_title_resp.reason))
 
