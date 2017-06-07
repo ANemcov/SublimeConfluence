@@ -371,11 +371,29 @@ class PostConfluencePageCommand(BaseConfluencePageCommand):
                 sublime.status_message(self.MSG_SUCCESS)
             else:
                 print(result.text)
-                print(mod_content)
+
+                new_view_source = self.view.window().new_file()
+                new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+                new_view_source.settings().set("auto_indent", False)
+                new_view_source.run_command("insert", {"characters": new_content})
+                new_view_source.set_name("Source")
+
+                new_view_mod = self.view.window().new_file()
+                new_view_mod.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+                new_view_mod.settings().set("auto_indent", False)
+                new_view_mod.run_command("insert", {"characters": mod_content})
+                new_view_mod.set_name("Modified")
+
                 sublime.error_message("Can not create content, reason: {}".format(result.reason))
         else:
             print(response.text)
-            print(new_content)
+
+            new_view_source = self.view.window().new_file()
+            new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+            new_view_source.settings().set("auto_indent", False)
+            new_view_source.run_command("insert", {"characters": new_content})
+            new_view_source.set_name("Source")
+
             sublime.error_message("Can not get ancestor, reason: {}".format(response.reason))
 
 
@@ -547,11 +565,8 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
             print(response.text)
 
             new_view_source = self.view.window().new_file()
-            # set syntax file
             new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
             new_view_source.settings().set("auto_indent", False)
-
-            # insert the page
             new_view_source.run_command("insert", {"characters": new_content})
             new_view_source.set_name("Modified")
 
