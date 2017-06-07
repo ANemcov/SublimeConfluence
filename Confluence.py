@@ -132,7 +132,7 @@ class ConfluenceApi(object):
         if not update_content_resp.ok:
             return update_content_resp, new_content_data
 
-        content_id = conf.get_content_id(update_content_resp.json())
+        content_id = self.get_content_id(update_content_resp.json())
         upload_resp = self.create_or_update_attachments(content_id, images)
         if upload_resp.ok:
             return update_content_resp, new_content_data
@@ -158,6 +158,10 @@ class ConfluenceApi(object):
 
     def get_content_history(self, content_id):
         return self._get("content/{}/history".format(content_id))
+
+    def get_content_id(self, content):
+        id = content["id"]
+        return "{}".format(id)
 
     def get_content_uri(self, content):
         print(content["_links"])
