@@ -2,8 +2,12 @@ import json
 import os
 import re
 import sys
+import mimetypes
 
 import requests
+from PIL import Image
+import codecs
+
 import sublime
 import sublime_plugin
 
@@ -32,7 +36,13 @@ class ConfluenceApi(object):
 
     def _request(self, method, sub_uri, params=None, **kwargs):
         url = "{}/{}".format(self.base_uri, sub_uri)
+
         headers = {"Content-Type": "application/json"}
+        if "headers" in kwargs:
+            if not kwargs["headers"] is None:
+                headers = kwargs["headers"]  # headers.update(kwargs["headers"])
+            kwargs.pop("headers", None)
+
         if params:
             kwargs.update(params=params)
         # Ensure we are authenticated (set cookie, session, etc.)
@@ -48,14 +58,81 @@ class ConfluenceApi(object):
     def _get(self, url, params=None):
         return self._request("get", url, params=params)
 
-    def _put(self, url, data=None):
-        return self._request("put", url, data=json.dumps(data))
+    def _put(self, url, data=None, files=None, headers=None):
+        if data is None:
+            return self._request("put", url, files=files, headers=headers)
+        else:
+            return self._request("put", url, data=json.dumps(data), files=files, headers=headers)
 
     def _delete(self, url, params=None):
         return self._request("delete", url, params=params)
 
+    def extract_images(self, content_data, source_filename="/"):
+
+        doc = lxml.html.fromstring(content_data['body']['value'])
+
+        file_dir = os.path.dirname(os.path.abspath(source_filename))
+        if not file_dir[-1] in "/\\":
+            if sys.platform == "win32" or sys.platform == "win32":
+                file_dir += "\\"
+            else:
+                file_dir += "/"
+
+        resources = []
+
+        for img in doc.xpath('//img'):
+            img.tag = "ac:image"
+            _src = (img.get('src'))
+            img.attrib.clear()
+
+            if os.path.isfile(file_dir + _src):
+                resources.append(dict({"filename": os.path.basename(file_dir + _src),
+                                       "fullpath": file_dir + _src}))
+                _template = "<ri:attachment ri:filename=\"%s\" />" % os.path.basename(file_dir + _src)
+                link = lxml.html.fromstring(_template)  # .find('.//attachment')
+                link.tag = "ri:attachment"
+                img.insert(1, link)
+
+                w, h = Image.open(file_dir + _src).size
+                img.attrib["ac:width"] = "{}".format(min(w, 500))
+
+                img.attrib["ac:align"] = "center"
+
+        content_data['body']['value'] = lxml.html.tostring(doc, pretty_print=True, encoding="utf-8").decode("utf-8")
+
+        return content_data, images
+
+    def upload_child_attachment(self, content_id, attachment_dict):
+        content_type, encoding = mimetypes.guess_type(attachment_dict["fullpath"])
+        if content_type is None:
+            content_type = 'multipart/form-data'
+        return self._put("content/{}/child/attachment".format(content_id),
+                         data=None,
+                         files={"file": (attachment_dict["filename"],
+                                         open(attachment_dict["fullpath"], 'rb'),
+                                         content_type)},
+                         headers={'X-Atlassian-Token': 'no-check'})
+
+    def create_or_update_attachments(self, content_id, resources):
+
+        for img in resources:
+            upload_resp = self.upload_child_attachment(content_id, img)
+            if not upload_resp.ok:
+                return upload_resp
+
+        return upload_resp
+
     def create_content(self, content_data):
-        return self._post("content/", data=content_data)
+
+        new_content_data, images = self.extract_images(content_data)
+
+        update_content_resp = self._post("content/", data=new_content_data)
+        if not update_content_resp.ok:
+            return update_content_resp
+
+        content_id = conf.get_content_id(update_content_resp.json())
+        upload_resp = self.create_or_update_attachments(content_id, images)
+        return upload_resp
 
     def search_content(self, space_key, title):
         cql = "type=page AND space=\"{}\" AND title~\"{}\"".format(space_key, title)
@@ -83,8 +160,15 @@ class ConfluenceApi(object):
         return "{}{}".format(base, webui)
 
     def update_content(self, content_id, content_data):
-        return self._put("content/{}".format(content_id),
-                         data=content_data)
+        new_content_data, images = self.extract_images(content_data)
+
+        update_content_resp = self._put("content/{}".format(content_id),
+                                        data=new_content_data)
+        if not update_content_resp.ok:
+            return update_content_resp
+
+        upload_resp = self.create_or_update_attachments(content_id, images)
+        return upload_resp
 
     def delete_content(self, content_id):
         return self._delete("content/{}".format(content_id))
