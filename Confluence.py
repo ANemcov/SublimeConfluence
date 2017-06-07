@@ -128,11 +128,11 @@ class ConfluenceApi(object):
 
         update_content_resp = self._post("content/", data=new_content_data)
         if not update_content_resp.ok:
-            return update_content_resp
+            return update_content_resp, new_content_data
 
         content_id = conf.get_content_id(update_content_resp.json())
         upload_resp = self.create_or_update_attachments(content_id, images)
-        return upload_resp
+        return upload_resp, new_content_data
 
     def search_content(self, space_key, title):
         cql = "type=page AND space=\"{}\" AND title~\"{}\"".format(space_key, title)
@@ -165,7 +165,7 @@ class ConfluenceApi(object):
         update_content_resp = self._put("content/{}".format(content_id),
                                         data=new_content_data)
         if not update_content_resp.ok:
-            return update_content_resp
+            return update_content_resp, new_content_data
 
         upload_resp = self.create_or_update_attachments(content_id, images)
         return upload_resp, new_content_data
@@ -349,7 +349,7 @@ class PostConfluencePageCommand(BaseConfluencePageCommand):
             body = dict(storage=dict(value=new_content, representation="storage"))
             data = dict(type="page", title=meta["title"], ancestors=[dict(id=ancestor_id)],
                         space=space, body=body)
-            result = self.confluence_api.create_content(data, self.view.file_name())
+            result, mod_content = self.confluence_api.create_content(data, self.view.file_name())
             if result.ok:
                 self.view.settings().set("confluence_content", result.json())
                 # copy content url
@@ -358,9 +358,11 @@ class PostConfluencePageCommand(BaseConfluencePageCommand):
                 sublime.status_message(self.MSG_SUCCESS)
             else:
                 print(result.text)
+                print(mod_content)
                 sublime.error_message("Can not create content, reason: {}".format(result.reason))
         else:
             print(response.text)
+            print(new_content)
             sublime.error_message("Can not get ancestor, reason: {}".format(response.reason))
 
 
@@ -520,6 +522,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                 sublime.error_message("Can't update content, reason: {}".format(response.reason))
         except Exception:
             print(response.text)
+            print(new_content)
             sublime.error_message("Can't update content, reason: {}".format(response.reason))
 
     def update_from_source(self):
@@ -564,6 +567,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                         update_content_resp.reason))
             else:
                 print(get_content_by_id_resp.text)
+                print(new_content)
                 sublime.error_message("Can not get content by id, reason: {}".format(
                     get_content_by_id_resp.reason))
         else:
