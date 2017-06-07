@@ -159,8 +159,8 @@ class ConfluenceApi(object):
         webui = content["_links"]["webui"]
         return "{}{}".format(base, webui)
 
-    def update_content(self, content_id, content_data):
-        new_content_data, images = self.extract_images(content_data)
+    def update_content(self, content_id, content_data, filename=None):
+        new_content_data, images = self.extract_images(content_data, source_filename=filename)
 
         update_content_resp = self._put("content/{}".format(content_id),
                                         data=new_content_data)
@@ -508,7 +508,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                     space=space, version=version, body=body)
         try:
             self.confluence_api = ConfluenceApi(self.username, self.password, self.base_uri)
-            response = self.confluence_api.update_content(content_id, data)
+            response = self.confluence_api.update_content(content_id, data, self.view.file_name())
             if response.ok:
                 content_uri = self.confluence_api.get_content_uri(self.content)
                 sublime.set_clipboard(content_uri)
