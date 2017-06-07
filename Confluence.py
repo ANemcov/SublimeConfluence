@@ -102,6 +102,17 @@ class ConfluenceApi(object):
 
         return content_data, images
 
+    def upload_child_attachment(self, content_id, attachment_dict):
+        content_type, encoding = mimetypes.guess_type(attachment_dict["fullpath"])
+        if content_type is None:
+            content_type = 'multipart/form-data'
+        return self._put("content/{}/child/attachment".format(content_id),
+                         data=None,
+                         files={"file": (attachment_dict["filename"],
+                                         open(attachment_dict["fullpath"], 'rb'),
+                                         content_type)},
+                         headers={'X-Atlassian-Token': 'no-check'})
+
     def create_or_update_attachments(self, content_id, resources):
 
         for img in resources:
@@ -149,23 +160,18 @@ class ConfluenceApi(object):
         return "{}{}".format(base, webui)
 
     def update_content(self, content_id, content_data):
-        return self._put("content/{}".format(content_id),
-                         data=content_data)
+        new_content_data, images = self.extract_images(content_data)
+
+        update_content_resp = self._put("content/{}".format(content_id),
+                                        data=new_content_data)
+        if not update_content_resp.ok:
+            return update_content_resp
+
+        upload_resp = self.create_or_update_attachments(content_id, images)
+        return upload_resp
 
     def delete_content(self, content_id):
         return self._delete("content/{}".format(content_id))
-
-    def upload_child_attachment(self, content_id, attachment_dict):
-        content_type, encoding = mimetypes.guess_type(attachment_dict["fullpath"])
-        if content_type is None:
-            content_type = 'multipart/form-data'
-        return self._put("content/{}/child/attachment".format(content_id),
-                         data=None,
-                         files={"file": (attachment_dict["filename"],
-                                         open(attachment_dict["fullpath"], 'rb'),
-                                         content_type)},
-                         headers={'X-Atlassian-Token': 'no-check'})
-
 
 
 class Markup(object):
