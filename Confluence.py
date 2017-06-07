@@ -122,9 +122,9 @@ class ConfluenceApi(object):
 
         return upload_resp
 
-    def create_content(self, content_data):
+    def create_content(self, content_data, filename=None):
 
-        new_content_data, images = self.extract_images(content_data)
+        new_content_data, images = self.extract_images(content_data, source_filename=filename)
 
         update_content_resp = self._post("content/", data=new_content_data)
         if not update_content_resp.ok:
@@ -349,7 +349,7 @@ class PostConfluencePageCommand(BaseConfluencePageCommand):
             body = dict(storage=dict(value=new_content, representation="storage"))
             data = dict(type="page", title=meta["title"], ancestors=[dict(id=ancestor_id)],
                         space=space, body=body)
-            result = self.confluence_api.create_content(data)
+            result = self.confluence_api.create_content(data, self.view.file_name())
             if result.ok:
                 self.view.settings().set("confluence_content", result.json())
                 # copy content url
@@ -550,7 +550,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                 data = dict(id=content_id, type="page", title=meta["title"],
                             space=space, version=version, body=body)
 
-                update_content_resp = self.confluence_api.update_content(content_id, data)
+                update_content_resp = self.confluence_api.update_content(content_id, data, self.view.file_name())
                 if update_content_resp.ok:
                     self.view.settings().set("confluence_content", update_content_resp.json())
                     content_uri = self.confluence_api.get_content_uri(update_content_resp.json())
