@@ -165,7 +165,7 @@ class ConfluenceApi(object):
         return "{}".format(id)
 
     def get_content_uri(self, content):
-        print(content["_links"])
+        print("Page links: %s" % content["_links"])
         base = content["_links"]["base"]
         webui = content["_links"]["webui"]
         return "{}{}".format(base, webui)
@@ -240,7 +240,6 @@ class Markup(object):
             else:
                 content = tmp[x + 1:]
                 break
-        print("Meta: %s" % meta)
         return (meta, content)
 
 
