@@ -5,7 +5,7 @@ import sys
 import mimetypes
 
 import requests
-from PIL import Image
+# from PIL import Image
 import codecs
 
 import sublime
@@ -69,9 +69,10 @@ class ConfluenceApi(object):
 
     def extract_images(self, content_data, source_filename="/"):
 
-        doc = lxml.html.fromstring(content_data['body']['value'])
+        doc = lxml.html.fromstring(content_data['body']['storage']['value'])
 
         file_dir = os.path.dirname(os.path.abspath(source_filename))
+        print("Extract files form: %s \r\n" % file_dir)
         if not file_dir[-1] in "/\\":
             if sys.platform == "win32" or sys.platform == "win32":
                 file_dir += "\\"
@@ -82,8 +83,12 @@ class ConfluenceApi(object):
 
         for img in doc.xpath('//img'):
             img.tag = "ac:image"
-            _src = (img.get('src'))
+            _src = (img.get('src')).replace("%20", " ")
             img.attrib.clear()
+            # w, h = Image.open(file_dir + _src).size
+            w = 500
+            img.attrib["ac:width"] = "{}".format(min(w, 500))
+            img.attrib["ac:align"] = "center"
 
             if os.path.isfile(file_dir + _src):
                 resources.append(dict({"filename": os.path.basename(file_dir + _src),
@@ -93,14 +98,12 @@ class ConfluenceApi(object):
                 link.tag = "ri:attachment"
                 img.insert(1, link)
 
-                w, h = Image.open(file_dir + _src).size
-                img.attrib["ac:width"] = "{}".format(min(w, 500))
+        content_data['body']['storage']['value'] = lxml.html.tostring(doc,
+                                                                      pretty_print=True,
+                                                                      encoding="utf-8").decode("utf-8").replace("[TOC]",
+                                                                                                                "<structured-macro ac:name=\"toc\" ac:schema-version=\"1\" />")
 
-                img.attrib["ac:align"] = "center"
-
-        content_data['body']['value'] = lxml.html.tostring(doc, pretty_print=True, encoding="utf-8").decode("utf-8")
-
-        return content_data, images
+        return content_data, resources
 
     def upload_child_attachment(self, content_id, attachment_dict):
         content_type, encoding = mimetypes.guess_type(attachment_dict["fullpath"])
@@ -130,9 +133,12 @@ class ConfluenceApi(object):
         if not update_content_resp.ok:
             return update_content_resp, new_content_data
 
-        content_id = conf.get_content_id(update_content_resp.json())
+        content_id = self.get_content_id(update_content_resp.json())
         upload_resp = self.create_or_update_attachments(content_id, images)
-        return upload_resp, new_content_data
+        if upload_resp.ok:
+            return update_content_resp, new_content_data
+        else:
+            return upload_resp, new_content_data
 
     def search_content(self, space_key, title):
         cql = "type=page AND space=\"{}\" AND title~\"{}\"".format(space_key, title)
@@ -154,7 +160,12 @@ class ConfluenceApi(object):
     def get_content_history(self, content_id):
         return self._get("content/{}/history".format(content_id))
 
+    def get_content_id(self, content):
+        id = content["id"]
+        return "{}".format(id)
+
     def get_content_uri(self, content):
+        print("Page links: %s" % content["_links"])
         base = content["_links"]["base"]
         webui = content["_links"]["webui"]
         return "{}{}".format(base, webui)
@@ -168,7 +179,10 @@ class ConfluenceApi(object):
             return update_content_resp, new_content_data
 
         upload_resp = self.create_or_update_attachments(content_id, images)
-        return upload_resp, new_content_data
+        if upload_resp.ok:
+            return update_content_resp, new_content_data
+        else:
+            return upload_resp, new_content_data
 
     def delete_content(self, content_id):
         return self._delete("content/{}".format(content_id))
@@ -358,11 +372,29 @@ class PostConfluencePageCommand(BaseConfluencePageCommand):
                 sublime.status_message(self.MSG_SUCCESS)
             else:
                 print(result.text)
-                print(mod_content)
+
+                new_view_source = self.view.window().new_file()
+                new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+                new_view_source.settings().set("auto_indent", False)
+                new_view_source.run_command("insert", {"characters": new_content})
+                new_view_source.set_name("Source")
+
+                new_view_mod = self.view.window().new_file()
+                new_view_mod.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+                new_view_mod.settings().set("auto_indent", False)
+                new_view_mod.run_command("insert", {"characters": mod_content})
+                new_view_mod.set_name("Modified")
+
                 sublime.error_message("Can not create content, reason: {}".format(result.reason))
         else:
             print(response.text)
-            print(new_content)
+
+            new_view_source = self.view.window().new_file()
+            new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+            new_view_source.settings().set("auto_indent", False)
+            new_view_source.run_command("insert", {"characters": new_content})
+            new_view_source.set_name("Source")
+
             sublime.error_message("Can not get ancestor, reason: {}".format(response.reason))
 
 
@@ -462,7 +494,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
     def run(self, edit):
         super(UpdateConfluencePageCommand, self).run(edit)
         self.content = self.view.settings().get("confluence_content")
-        if self.content:
+        if self.content and self.content.get('id'):
             self.callback = self.update_from_editor
         else:
             self.callback = self.update_from_source
@@ -502,7 +534,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
             markup = Markup()
             meta, content = markup.get_meta_and_content(contents)
             new_content = markup.to_html("\n".join(content), syntax)
-        print(new_content)
+
         space = dict(key=space_key)
         version = dict(number=version_number, minorEdit=False)
         body = dict(storage=dict(value=new_content, representation="storage"))
@@ -511,6 +543,7 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
         try:
             self.confluence_api = ConfluenceApi(self.username, self.password, self.base_uri)
             response, mod_content = self.confluence_api.update_content(content_id, data, self.view.file_name())
+
             if response.ok:
                 content_uri = self.confluence_api.get_content_uri(self.content)
                 sublime.set_clipboard(content_uri)
@@ -518,25 +551,43 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                 self.view.settings().set("confluence_content", response.json())
             else:
                 print(response.text)
-                print(mod_content)
+
+                new_view_mod = self.view.window().new_file()
+                # set syntax file
+                new_view_mod.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+                new_view_mod.settings().set("auto_indent", False)
+
+                # insert the page
+                new_view_mod.run_command("insert", {"characters": mod_content})
+                new_view_mod.set_name("Source")
+
                 sublime.error_message("Can't update content, reason: {}".format(response.reason))
         except Exception:
             print(response.text)
-            print(new_content)
+
+            new_view_source = self.view.window().new_file()
+            new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+            new_view_source.settings().set("auto_indent", False)
+            new_view_source.run_command("insert", {"characters": new_content})
+            new_view_source.set_name("Modified")
+
+
             sublime.error_message("Can't update content, reason: {}".format(response.reason))
 
     def update_from_source(self):
+
+        current_filename = self.view.file_name()
         region = sublime.Region(0, self.view.size())
         contents = self.view.substr(region)
         markup = Markup()
         meta, content = markup.get_meta_and_content(contents)
         syntax = self.view.settings().get("syntax")
         new_content = markup.to_html("\n".join(content), syntax)
-        print(new_content)
         if not new_content:
             sublime.error_message(
                 "Can't update: this doesn't appear to be a valid Confluence page.")
             return
+
         self.confluence_api = ConfluenceApi(self.username, self.password, self.base_uri)
 
         get_content_by_title_resp = self.confluence_api.get_content_by_title(
@@ -555,7 +606,8 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                 data = dict(id=content_id, type="page", title=meta["title"],
                             space=space, version=version, body=body)
 
-                update_content_resp, mod_content = self.confluence_api.update_content(content_id, data, self.view.file_name())
+                update_content_resp, mod_content = self.confluence_api.update_content(content_id, data, current_filename)
+
                 if update_content_resp.ok:
                     self.view.settings().set("confluence_content", update_content_resp.json())
                     content_uri = self.confluence_api.get_content_uri(update_content_resp.json())
@@ -563,17 +615,57 @@ class UpdateConfluencePageCommand(BaseConfluencePageCommand):
                     sublime.status_message(self.MSG_SUCCESS)
                 else:
                     print(update_content_resp.text)
-                    print(mod_content)
+
+                    new_view_source = self.view.window().new_file()
+                    # set syntax file
+                    new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+                    new_view_source.settings().set("auto_indent", False)
+
+                    # insert the page
+                    new_view_source.run_command("insert", {"characters": new_content})
+                    new_view_source.set_name("Source")
+                    new_view_source.run_command("expand_tabs", {"set_translate_tabs": True})
+
+                    new_view_mod = self.view.window().new_file()
+                    # set syntax file
+                    new_view_mod.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+                    new_view_mod.settings().set("auto_indent", False)
+
+                    # insert the page
+                    new_view_mod.run_command("insert", {"characters": mod_content})
+                    new_view_mod.set_name("Modifed")
+                    new_view_mod.run_command("expand_tabs", {"set_translate_tabs": True})
+
                     sublime.error_message("Can not update content, reason: {}".format(
                         update_content_resp.reason))
             else:
                 print(get_content_by_id_resp.text)
-                print(new_content)
+
+                new_view_source = self.view.window().new_file()
+                # set syntax file
+                new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+                new_view_source.settings().set("auto_indent", False)
+
+                # insert the page
+                new_view_source.run_command("insert", {"characters": new_content})
+                new_view_source.set_name("Source")
+                new_view_source.run_command("expand_tabs", {"set_translate_tabs": True})
+
                 sublime.error_message("Can not get content by id, reason: {}".format(
                     get_content_by_id_resp.reason))
         else:
             print(get_content_by_title_resp.text)
-            print(new_content)
+
+            new_view_source = self.view.window().new_file()
+            # set syntax file
+            new_view_source.set_syntax_file("Packages/HTML/HTML.sublime-syntax")
+            new_view_source.settings().set("auto_indent", False)
+
+            # insert the page
+            new_view_source.run_command("insert", {"characters": new_content})
+            new_view_source.set_name("Source")
+            new_view_source.run_command("expand_tabs", {"set_translate_tabs": True})
+
             sublime.error_message("Can not get content by title, reason: {}".format(
                 get_content_by_title_resp.reason))
 
