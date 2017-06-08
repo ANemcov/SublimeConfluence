@@ -72,7 +72,7 @@ class ConfluenceApi(object):
         doc = lxml.html.fromstring(content_data['body']['storage']['value'])
 
         file_dir = os.path.dirname(os.path.abspath(source_filename))
-        print("Extract files form: %s" % file_dir)
+        print("Extract files form: %s \r\n" % file_dir)
         if not file_dir[-1] in "/\\":
             if sys.platform == "win32" or sys.platform == "win32":
                 file_dir += "\\"
@@ -85,6 +85,10 @@ class ConfluenceApi(object):
             img.tag = "ac:image"
             _src = (img.get('src')).replace("%20", " ")
             img.attrib.clear()
+            # w, h = Image.open(file_dir + _src).size
+            w = 500
+            img.attrib["ac:width"] = "{}".format(min(w, 500))
+            img.attrib["ac:align"] = "center"
 
             if os.path.isfile(file_dir + _src):
                 resources.append(dict({"filename": os.path.basename(file_dir + _src),
@@ -94,13 +98,10 @@ class ConfluenceApi(object):
                 link.tag = "ri:attachment"
                 img.insert(1, link)
 
-                # w, h = Image.open(file_dir + _src).size
-                w = 500
-                img.attrib["ac:width"] = "{}".format(min(w, 500))
-
-                img.attrib["ac:align"] = "center"
-
-        content_data['body']['storage']['value'] = lxml.html.tostring(doc, pretty_print=True, encoding="utf-8").decode("utf-8")
+        content_data['body']['storage']['value'] = lxml.html.tostring(doc,
+                                                                      pretty_print=True,
+                                                                      encoding="utf-8").decode("utf-8").replace("[TOC]",
+                                                                                                                "<structured-macro ac:name=\"toc\" ac:schema-version=\"1\" />")
 
         return content_data, resources
 
@@ -239,6 +240,7 @@ class Markup(object):
             else:
                 content = tmp[x + 1:]
                 break
+        print("Meta: %s" % meta)
         return (meta, content)
 
 
