@@ -220,7 +220,7 @@ class Markup(object):
             ("reStructuredText", self.rst_to_html)])
 
     def markdown_to_html(self, content):
-        return markdown2.markdown(content).encode("utf-8").decode()
+        return markdown2.markdown(content, extras=['tables']).encode("utf-8").decode()
 
     def rst_to_html(self, content):
         try:
